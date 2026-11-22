@@ -1,0 +1,26 @@
+# MistBridge frps — production edge configuration.
+# Placeholder values are replaced during deployment. Never commit real secrets.
+bindPort = 23333
+proxyBindAddr = "0.0.0.0"
+detailedErrorsToClient = true
+
+auth.method = "token"
+auth.token = "__FRP_AUTH_TOKEN__"
+
+# Only the management-owned public port pool is exposed by frps.
+allowPorts = [{ start = 21000, end = 21999 }]
+maxPortsPerClient = 50
+
+# All Agent <-> Edge traffic is encrypted with frp's built-in TLS.
+transport.tls.force = true
+
+log.to = "console"
+log.level = "info"
+log.disablePrintColor = true
+
+# The management API enforces per-device tokens, port ownership and proxy names.
+[[httpPlugins]]
+name = "mistbridge-auth"
+addr = "127.0.0.1:4000"
+path = "/internal/frp/__FRP_PLUGIN_SECRET__"
+ops = ["Login", "NewProxy", "CloseProxy", "Ping", "NewUserConn"]

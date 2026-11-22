@@ -1,0 +1,121 @@
+name: mistbridge
+
+services:
+  backend:
+    build:
+      context: ./deploy/backend
+      dockerfile: Dockerfile
+    image: mistbridge-backend:1.0.0
+    container_name: mistbridge-backend
+    restart: unless-stopped
+    user: "1001:1001"
+    env_file:
+      - .env
+    environment:
+      DATA_DIR: /data
+      PORT: "4000"
+    ports:
+      # Only loopback: nginx reaches it over the internal bridge, frps uses host loopback.
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ./data:/data
+    networks:
+      - mistbridge-net
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 384m
+    pids_limit: 200
+    stop_grace_period: 15s
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "bun",
+          "-e",
+          "fetch('http://127.0.0.1:4000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 6s
+      retries: 4
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  web:
+    image: nginxinc/nginx-unprivileged:1.27-alpine
+    container_name: mistbridge-web
+    restart: unless-stopped
+    user: "101:101"
+    ports:
+      - "20500:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./web/dist:/usr/share/nginx/html:ro
+      - ./deploy/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./deploy/security-headers.conf:/etc/nginx/security-headers.conf:ro
+    networks:
+      - mistbridge-net
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+      - /var/cache/nginx:size=32m,mode=0777
+      - /var/log/nginx:size=16m,mode=0777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 96m
+    pids_limit: 128
+    stop_grace_period: 15s
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/nginx-health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  frps:
+    build:
+      context: ./deploy/frps
+      dockerfile: Dockerfile
+    image: mistbridge-frps:1.0.0
+    container_name: mistbridge-frps
+    restart: unless-stopped
+    # frps owns the public port pool, so it shares the host network namespace.
+    network_mode: host
+    user: "1001:1001"
+    volumes:
+      - ./frps.toml:/etc/frp/frps.toml:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 256m
+    pids_limit: 256
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  mistbridge-net:
+    driver: bridge

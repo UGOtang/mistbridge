@@ -1,0 +1,20 @@
+{
+  "name": "mistbridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "MistBridge — secure multi-device reverse tunnel console",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "scripts": {
+    "dev:server": "cd server && bun --hot src/index.ts",
+    "dev:web": "cd web && bun run dev",
+    "build:server": "bun build server/src/index.ts --target=bun --outfile=server/dist/server.js --minify",
+    "build": "bun run build:server && cd web && bun run build",
+    "start": "cd server && bun src/index.ts",
+    "test": "cd server && bun test",
+    "typecheck": "cd server && bun run typecheck && cd ../web && bun run typecheck"
+  }
+}
